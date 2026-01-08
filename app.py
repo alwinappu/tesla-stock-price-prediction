@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-from tensorflow.keras.models import load_model
+import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 
@@ -13,53 +13,33 @@ st.set_page_config(
 )
 
 # ---------------- TITLE ----------------
-st.markdown(
-    """
-    <h1 style='text-align: center;'>🚗 Tesla Stock Price Prediction</h1>
-    <p style='text-align: center; font-size:18px;'>
-    Deep Learning using SimpleRNN & LSTM
-    </p>
-    """,
-    unsafe_allow_html=True
-)
-
+st.title("Tesla Stock Price Prediction")
+st.markdown("Deep Learning based Time-Series Forecasting using SimpleRNN and LSTM")
 st.markdown("---")
 
 # ---------------- SIDEBAR ----------------
-st.sidebar.header("Model Configuration")
-
-st.sidebar.markdown(
-    """
-    This application predicts **Tesla's closing stock price**
-    using deep learning time-series models.
-    """
-)
+st.sidebar.header("Configuration")
 
 model_choice = st.sidebar.selectbox(
-    "Choose Model",
+    "Select Model",
     ["SimpleRNN", "LSTM"]
 )
 
 days = st.sidebar.radio(
-    "Prediction Horizon",
+    "Prediction Horizon (Days)",
     [1, 5, 10]
 )
 
-st.sidebar.markdown("---")
-st.sidebar.info(
-    """
-    **Dataset:** Tesla Historical Prices  
-    **Target:** Closing Price  
-    **Window Size:** 60 days
-    """
-)
-
 # ---------------- LOAD DATA ----------------
-df = pd.read_csv("TSLA.csv")
-df['Date'] = pd.to_datetime(df['Date'])
-df.set_index('Date', inplace=True)
+@st.cache_data
+def load_data():
+    df = pd.read_csv("TSLA.csv")
+    df["Date"] = pd.to_datetime(df["Date"])
+    df.set_index("Date", inplace=True)
+    return df
 
-close_data = df[['Close']]
+df = load_data()
+close_data = df[["Close"]]
 
 # ---------------- SCALE DATA ----------------
 scaler = MinMaxScaler(feature_range=(0, 1))
@@ -69,10 +49,14 @@ WINDOW_SIZE = 60
 last_sequence = scaled_close[-WINDOW_SIZE:]
 
 # ---------------- LOAD MODEL ----------------
-if model_choice == "SimpleRNN":
-    model = load_model("simple_rnn_model.h5")
-else:
-    model = load_model("lstm_model.h5")
+@st.cache_resource
+def load_dl_model(model_name):
+    if model_name == "SimpleRNN":
+        return tf.keras.models.load_model("simple_rnn_model.h5")
+    else:
+        return tf.keras.models.load_model("lstm_model.h5")
+
+model = load_dl_model(model_choice)
 
 # ---------------- PREDICTION FUNCTION ----------------
 def predict_future(model, seq, days, window):
@@ -93,12 +77,12 @@ def predict_future(model, seq, days, window):
     )
 
 # ---------------- MAIN UI ----------------
-st.subheader("🔮 Predict Future Closing Prices")
+st.subheader("Future Closing Price Prediction")
 
-if st.button("Run Prediction"):
+if st.button("Predict"):
     predictions = predict_future(model, last_sequence, days, WINDOW_SIZE)
 
-    # KPI Cards
+    # Display predictions
     cols = st.columns(len(predictions))
     for i, col in enumerate(cols):
         col.metric(
@@ -108,23 +92,12 @@ if st.button("Run Prediction"):
 
     st.markdown("---")
 
-    # Plot
+    # Plot predictions
     fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(predictions, marker='o', linewidth=2)
+    ax.plot(predictions, marker="o", linewidth=2)
     ax.set_title(f"{model_choice} – {days}-Day Forecast")
     ax.set_xlabel("Days Ahead")
-    ax.set_ylabel("Predicted Price ($)")
+    ax.set_ylabel("Predicted Closing Price ($)")
     ax.grid(True)
 
     st.pyplot(fig)
-
-# ---------------- FOOTER ----------------
-st.markdown("---")
-st.markdown(
-    """
-    <p style='text-align: center; color: grey;'>
-    Developed by Appu | MSc Data Science | Deep Learning Project
-    </p>
-    """,
-    unsafe_allow_html=True
-)
